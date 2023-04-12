@@ -1,8 +1,9 @@
 ﻿using OpenAI_API;
+using OpenAI_API.Completions;
 
 namespace Lokad.Prompting;
 
-internal class OpenAIClient : ICompletionClient
+public class OpenAIClient : ICompletionClient
 {
     public int TokenCapacity => 2000;
 
@@ -15,6 +16,10 @@ internal class OpenAIClient : ICompletionClient
 
     public string GetCompletion(string prompt)
     {
-        return _api.Completions.GetCompletion(prompt).Result;
+        return _api.Completions            
+            .CreateCompletionAsync(
+            new CompletionRequest(prompt,
+                model: OpenAI_API.Models.Model.DavinciText,
+                temperature: 0.1)).Result.ToString();
     }
 }
