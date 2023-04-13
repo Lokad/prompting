@@ -14,10 +14,11 @@ public class EchoClient : ICompletionClient
         var content = s[1];
         var prevOutput = s[2];
 
-        if (prevOutput.Length == 0) return content;
+        return content;
+        //if (prevOutput.Length == 0) return content;
 
-        var output = content[(content.IndexOf(prevOutput[^3 ..]) + 3) ..];
+        //var output = content[(content.IndexOf(prevOutput[^3 ..]) + 3) ..];
 
-        return output;
+        //return output;
     }
 }

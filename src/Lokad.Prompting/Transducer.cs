@@ -2,10 +2,22 @@
 
 namespace Lokad.Prompting;
 
+/// <summary> Apply a general instruction in a streamed fashion.</summary>
+/// <remarks>
+/// PROMPT TEMPLATE:
+/// 
+/// Translate the following text from English to French.
+/// ### ENGLISH INPUT ###
+/// {{input}}
+/// ### FRENCH OUTPUT ###
+/// {{output}}
+/// </remarks>
 public class Transducer
 {
-    float InputOverlapRatio = 0.3f;
-    float OutputOverlapRatio = 0.15f;
+    public const string InputTag = "{{input}}";
+    public const string OutputTag = "{{output}}";
+
+    float OverlapRatio = 0.3f;
     float CharPerToken = 4f; // HACK: no port of 'tiktoken' package for C# yet
 
     ICompletionClient _client;
@@ -15,32 +27,41 @@ public class Transducer
         _client = client;
     }
 
-    public string Do(string instruction, string separator, string content)
+    public string Do(string prompt, string content)
     {
-        // TODO: use a prompt template with {{input}} and {{output}}
-        // TODO: use a single ratio (same for both) 
-        var inputStep = (int)(_client.TokenCapacity/2 * (1 - InputOverlapRatio) * CharPerToken);
-        var inputSize = (int)(_client.TokenCapacity/2 * CharPerToken);
+        if (prompt == null || !prompt.Contains(InputTag) || !prompt.Contains(OutputTag))
+            throw new ArgumentException("Invalid prompt");
+
+        var promptTokenCount = (int)((prompt.Length - InputTag.Length - OutputTag.Length) / CharPerToken);
+
+        var residualTokenCapacity = (_client.TokenCapacity - promptTokenCount) / 2;
+
+        var inputStep = (int)(residualTokenCapacity * (1 - OverlapRatio) * CharPerToken);
+        var inputSize = (int)(residualTokenCapacity * CharPerToken);
 
         var outputTail = string.Empty;
 
         var builder = new StringBuilder();
 
-        for (var i = 0; i < content.Length; i += inputStep)
+        for (var i = 0; ; i += inputStep)
         {
-            var input = instruction 
-                + separator + content[i..Math.Min(i + inputSize, content.Length)] // overlapping inputs
-                + separator + outputTail;
+            var input = prompt
+                .Replace(InputTag, content[i..Math.Min(i + inputSize, content.Length)])
+                .Replace(OutputTag, outputTail);
 
             outputTail = _client.GetCompletion(input);
 
-            if(i + inputStep < content.Length)
+            if(i + inputSize < content.Length)
             {
                 // truncate output, except for last chunck
-                outputTail = outputTail[0..^((int)(outputTail.Length * OutputOverlapRatio))];    
+                outputTail = outputTail[0..^((int)(outputTail.Length * OverlapRatio))];
+                builder.Append(outputTail);
             }
-
-            builder.Append(outputTail);
+            else
+            {
+                builder.Append(outputTail);
+                break;
+            }
         }
 
         return builder.ToString();

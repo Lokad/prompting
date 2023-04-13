@@ -19,9 +19,14 @@ public class TransducerTests
     {
         var transducer = new Transducer(new EchoClient());
 
+        var prompt =
+"""
+Do the echo###{{input}}###{{output}}
+""";
+
         string content = "The quick brown fox jumps over the lazy dog.";
 
-        var output = transducer.Do(instruction: "Do the echo", EchoClient.Separator, content: content);
+        var output = transducer.Do(prompt, content);
 
         Assert.Equal(content, output); // plain echo
     }
@@ -32,9 +37,18 @@ public class TransducerTests
         var apiKey = _config["OpenAIKey"];
         var transducer = new Transducer(new OpenAIClient(apiKey));
 
+        var prompt =
+"""
+Add the missing digit
+###
+{{input}}
+###
+{{output}}
+""";
+
         string content = "0 1 2 3 4 ";
 
-        var output = transducer.Do(instruction: "Add the missing digit", "###", content: content);
+        var output = transducer.Do(prompt, content);
 
         Assert.Equal("5", output);
     }
