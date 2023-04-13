@@ -62,7 +62,7 @@ Add the missing digit
         var prompt =
 """
 Continue the following translation from English to French.
-The output may not be starting the same place than the input.
+The output may not be starting at the same place than the input.
 Preserve all the Markdown syntax. Do not touch filenames (ex: images).
 ============== ENGLISH INPUT ==============
 {{input}}
@@ -76,5 +76,31 @@ Preserve all the Markdown syntax. Do not touch filenames (ex: images).
         var output = transducer.Do(prompt, content);
 
         File.WriteAllText("../../../../../sample/transducer/long-webpage-output.md", output);
+    }
+
+    [Fact(Skip = "15min to run")]
+    public void MarkdownifyLongEmail()
+    {
+        // Run from /test/Lokad.Prompting.Tests/bin/Debug/net7.0
+        var content = File.ReadAllText("../../../../../sample/transducer/long-email.html");
+
+        var prompt =
+"""
+Continue the following convertion from HTML to Markdown.
+The output may not be starting at the same place than the input.
+For images use the markdown syntax `![]()` but preserve the exact
+file path as found in the original HTML.
+============== RAW EMAIL HTML INPUT ==============
+{{input}}
+============== EMAIL MARKDOWN OUTPUT ==============
+{{output}}
+""";
+
+        var apiKey = _config["OpenAIKey"];
+        var transducer = new Transducer(new OpenAIClient(apiKey));
+
+        var output = transducer.Do(prompt, content);
+
+        File.WriteAllText("../../../../../sample/transducer/long-email-output.md", output);
     }
 }

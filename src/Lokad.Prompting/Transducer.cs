@@ -2,8 +2,18 @@
 
 namespace Lokad.Prompting;
 
-/// <summary> Apply a general instruction in a streamed fashion.</summary>
+/// <summary> 
+/// Apply a general tranformation process in a streamed manner.
+/// Intended for long documents that exceed token limits, for
+/// operations like translation, typo/grammar fixing, format 
+/// conversions, etc.
+/// </summary>
 /// <remarks>
+/// The gist of the transducer strategy consists of chunking,
+/// but stepping back both input and output at each iteration
+/// in order to let GPT clean continuations between one chunk
+/// and the next.
+/// 
 /// PROMPT TEMPLATE:
 /// 
 /// Continue the following translatin from English to French.
