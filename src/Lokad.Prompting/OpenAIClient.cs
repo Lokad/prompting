@@ -6,7 +6,7 @@ namespace Lokad.Prompting;
 
 public class OpenAIClient : ICompletionClient
 {
-    public int TokenCapacity => 2000; // HACK: this property should be model-dependent
+    public int TokenCapacity => 1500; // HACK: this property should be model-dependent
 
     readonly Model _model;
 
@@ -27,6 +27,7 @@ public class OpenAIClient : ICompletionClient
             .CreateCompletionAsync(
             new CompletionRequest(prompt,
                 model: _model,
-                temperature: _temperature)).Result.ToString();
+                temperature: _temperature,
+                max_tokens: 2049 /* HACK: this should not be hard-coded */)).Result.ToString();
     }
 }

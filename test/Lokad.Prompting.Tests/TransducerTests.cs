@@ -52,4 +52,29 @@ Add the missing digit
 
         Assert.Equal("5", output);
     }
+
+    [Fact(Skip = "15min to run")]
+    public void TranslateLongWebpage()
+    {
+        // Run from /test/Lokad.Prompting.Tests/bin/Debug/net7.0
+        var content = File.ReadAllText("../../../../../sample/transducer/long-webpage.md");
+
+        var prompt =
+"""
+Continue the following translation from English to French.
+The output may not be starting the same place than the input.
+Preserve all the Markdown syntax. Do not touch filenames (ex: images).
+============== ENGLISH INPUT ==============
+{{input}}
+============== FRENCH OUTPUT ==============
+{{output}}
+""";
+
+        var apiKey = _config["OpenAIKey"];
+        var transducer = new Transducer(new OpenAIClient(apiKey));
+
+        var output = transducer.Do(prompt, content);
+
+        File.WriteAllText("../../../../../sample/transducer/long-webpage-output.md", output);
+    }
 }

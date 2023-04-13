@@ -6,7 +6,7 @@ namespace Lokad.Prompting;
 /// <remarks>
 /// PROMPT TEMPLATE:
 /// 
-/// Translate the following text from English to French.
+/// Continue the following translatin from English to French.
 /// ### ENGLISH INPUT ###
 /// {{input}}
 /// ### FRENCH OUTPUT ###
