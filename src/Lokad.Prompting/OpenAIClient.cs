@@ -1,17 +1,24 @@
 ﻿using OpenAI_API;
 using OpenAI_API.Completions;
+using OpenAI_API.Models;
 
 namespace Lokad.Prompting;
 
 public class OpenAIClient : ICompletionClient
 {
-    public int TokenCapacity => 2000;
+    public int TokenCapacity => 2000; // HACK: this property should be model-dependent
 
-    OpenAIAPI _api;
+    readonly Model _model;
 
-    public OpenAIClient(string apiKey)
+    readonly double _temperature;
+
+    readonly OpenAIAPI _api;
+
+    public OpenAIClient(string apiKey, Model? model = null, double temperature = 0.1)
     {
         _api = new OpenAIAPI(apiKey);
+        _model = model ?? Model.DavinciText;
+        _temperature = temperature; 
     }
 
     public string GetCompletion(string prompt)
@@ -19,7 +26,7 @@ public class OpenAIClient : ICompletionClient
         return _api.Completions            
             .CreateCompletionAsync(
             new CompletionRequest(prompt,
-                model: OpenAI_API.Models.Model.DavinciText,
-                temperature: 0.1)).Result.ToString();
+                model: _model,
+                temperature: _temperature)).Result.ToString();
     }
 }

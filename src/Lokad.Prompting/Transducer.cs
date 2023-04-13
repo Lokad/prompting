@@ -2,7 +2,7 @@
 
 namespace Lokad.Prompting;
 
-public class Chunker
+public class Transducer
 {
     float InputOverlapRatio = 0.3f;
     float OutputOverlapRatio = 0.15f;
@@ -10,13 +10,15 @@ public class Chunker
 
     ICompletionClient _client;
 
-    public Chunker(ICompletionClient client)
+    public Transducer(ICompletionClient client)
     {
         _client = client;
     }
 
     public string Do(string instruction, string separator, string content)
     {
+        // TODO: use a prompt template with {{input}} and {{output}}
+        // TODO: use a single ratio (same for both) 
         var inputStep = (int)(_client.TokenCapacity/2 * (1 - InputOverlapRatio) * CharPerToken);
         var inputSize = (int)(_client.TokenCapacity/2 * CharPerToken);
 
