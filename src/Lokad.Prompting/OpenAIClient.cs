@@ -6,6 +6,7 @@ namespace Lokad.Prompting;
 
 public class OpenAIClient : ICompletionClient
 {
+    /// <remarks>Fine-tuned for Davinci model of OpenAI with a token size hard-coded at 4 chars.</remarks>
     public int TokenCapacity => 1500; // HACK: this property should be model-dependent
 
     readonly Model _model;

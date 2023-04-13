@@ -27,14 +27,16 @@ public class Transducer
     public const string InputTag = "{{input}}";
     public const string OutputTag = "{{output}}";
 
-    float OverlapRatio = 0.3f;
+    float OverlapRatio = 0.4f;
     float CharPerToken = 4f; // HACK: no port of 'tiktoken' package for C# yet
 
     ICompletionClient _client;
+    int _tokenCapacity;
 
-    public Transducer(ICompletionClient client)
+    public Transducer(ICompletionClient client, int? tokenCapacity = null)
     {
         _client = client;
+        _tokenCapacity = tokenCapacity ?? _client.TokenCapacity;
     }
 
     public string Do(string prompt, string content)
@@ -44,7 +46,7 @@ public class Transducer
 
         var promptTokenCount = (int)((prompt.Length - InputTag.Length - OutputTag.Length) / CharPerToken);
 
-        var residualTokenCapacity = (_client.TokenCapacity - promptTokenCount) / 2;
+        var residualTokenCapacity = (_tokenCapacity - promptTokenCount) / 2;
 
         var inputStep = (int)(residualTokenCapacity * (1 - OverlapRatio) * CharPerToken);
         var inputSize = (int)(residualTokenCapacity * CharPerToken);
