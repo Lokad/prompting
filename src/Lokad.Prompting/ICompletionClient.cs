@@ -4,5 +4,7 @@ public interface ICompletionClient
 {
     int TokenCapacity { get; }
 
+    int GetTokenCount(string content);
+
     string GetCompletion(string prompt);
 }

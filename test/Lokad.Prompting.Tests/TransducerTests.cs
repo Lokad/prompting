@@ -13,26 +13,8 @@ public class TransducerTests
             .Build();
     }
 
-
     [Fact]
-    public void Echo()
-    {
-        var transducer = new Transducer(new EchoClient());
-
-        var prompt =
-"""
-Do the echo###{{input}}###{{output}}
-""";
-
-        string content = "The quick brown fox jumps over the lazy dog.";
-
-        var output = transducer.Do(prompt, content);
-
-        Assert.Equal(content, output); // plain echo
-    }
-
-    [Fact]
-    public void OpenAI()
+    public void TrivialTransduce()
     {
         var apiKey = _config["OpenAIKey"];
         var transducer = new Transducer(new OpenAIClient(apiKey));
@@ -53,7 +35,7 @@ Add the missing digit
         Assert.Equal("5", output);
     }
 
-    [Fact(Skip = "15min to run")]
+    [Fact(Skip = "2min to run")]
     public void TranslateLongWebpage()
     {
         // Run from /test/Lokad.Prompting.Tests/bin/Debug/net7.0
@@ -63,10 +45,16 @@ Add the missing digit
 """
 Continue the following translation from English to French.
 The output may not be starting at the same place than the input.
-Preserve all the Markdown syntax. Do not touch filenames (ex: images).
-============== ENGLISH INPUT ==============
+Preserve TOML front matter, don't touch the '---' delimiters.
+Preserve all the Markdown syntax.
+Do not touch filenames (ex: images).
+Continue until you reach the line '!=!=! FRENCH OUTPUT !=!=!' 
+(but don't include it in your translation).
+
+!=!=! ENGLISH INPUT !=!=!
 {{input}}
-============== FRENCH OUTPUT ==============
+
+!=!=! FRENCH OUTPUT !=!=!
 {{output}}
 """;
 
@@ -78,7 +66,7 @@ Preserve all the Markdown syntax. Do not touch filenames (ex: images).
         File.WriteAllText("../../../../../sample/transducer/long-webpage-output.md", output);
     }
 
-    [Fact(Skip = "6min to run")]
+    [Fact(Skip = "3min to run")]
     public void MarkdownifyLongEmail()
     {
         // Run from /test/Lokad.Prompting.Tests/bin/Debug/net7.0
@@ -133,7 +121,7 @@ the identify of the persons or companies.
 """;
 
         var apiKey = _config["OpenAIKey"];
-        var transducer = new Transducer(new OpenAIClient(apiKey), 800 /* reduced capacity due to HTML */);
+        var transducer = new Transducer(new OpenAIClient(apiKey));
 
         var output = transducer.Do(prompt, content);
 
@@ -147,7 +135,8 @@ the identify of the persons or companies.
         var content = string.Join(Environment.NewLine,
             File.ReadLines("../../../../../sample/transducer/long-audio-transcript.vtt")
                 .Where((line, index) => index % 3 == 0)
-                .Skip(1));
+                .Skip(1)
+                .Select(line => line.Replace("</v>", string.Empty)));
 
         var prompt =
 """
@@ -155,6 +144,7 @@ Continue the following conversion from .VTT to Markdown.
 The output may not be starting at the same place than the input.
 The audio transcript quality of the .VTT file is poor. 
 Produce a higher quality edited version.
+Remove oral hesitations.
 Reduce the chitchat and neduce the number of transitions between people.
 Rephrase "oral" segment in the way they would be written instead.
 Make the back-and-forth replies bigger than they were.
