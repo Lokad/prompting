@@ -53,11 +53,9 @@ Make the back-and-forth replies bigger than they were.
 {{output}}
 ```
 
-## Transducer examples
+## Isoline transducer examples
 
 ### Translate Hugo/Markdown pages
-
-TODO: not working well, isoline transducer needed
 
 ```
 Continue the following translation from English to French.
