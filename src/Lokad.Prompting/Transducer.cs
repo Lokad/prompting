@@ -1,6 +1,4 @@
-﻿using System.Text;
-
-namespace Lokad.Prompting;
+﻿namespace Lokad.Prompting;
 
 /// <summary> 
 /// Apply a general tranformation process in a streamed manner.

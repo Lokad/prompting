@@ -7,9 +7,11 @@ lower-level primitives.
 
 **Transducer:** Apply an general transformation to an arbitrarily
 long document, through a linear progressiong through the document.
+This works well with HTML document.
 
-TODO: 'IsolineTransducer', when there is a line-by-line isomorphism between input and output
-IDEA: introduce "markers" to help the transducer not to loose track of its own progression
+**Isoline transducer:** Apply a line-isomorphic tranformation process,
+through a linear progressiong through the document. This works well
+with Markdown documents (where paragraphs stay on 1 line).
 
 ## Notable dependencies
 
@@ -51,6 +53,8 @@ Make the back-and-forth replies bigger than they were.
 {{output}}
 ```
 
+## Transducer examples
+
 ### Translate Hugo/Markdown pages
 
 TODO: not working well, isoline transducer needed
@@ -59,11 +63,19 @@ TODO: not working well, isoline transducer needed
 Continue the following translation from English to French.
 The output may not be starting at the same place than the input.
 Preserve TOML front matter, don't touch the '---' delimiters.
-Preserve all the Markdown syntax.
-Do not touch filenames (ex: images).
-============== ENGLISH INPUT ==============
+Do not translate the keys in the TOML header.
+Preserve all the Markdown syntax. 
+Do not skip images, such as `![Blah blah](/my-image.jpg)`.
+Do not touch filenames (ex: `/my-image.jpg`).
+Keep prefix line numbers untouched (ex: L123).
+Keep blank lines untouched.
+Keep line breaks untouched. 
+Don't introduce extra line breaks, don't remove them either.
+
+!=!=! ENGLISH INPUT !=!=!
 {{input}}
-============== FRENCH OUTPUT ==============
+
+!=!=! FRENCH OUTPUT !=!=!
 {{output}}
 ```
 
