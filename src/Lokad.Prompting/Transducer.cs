@@ -45,7 +45,7 @@ public class Transducer
             throw new ArgumentException("Invalid prompt");
 
         var promptTokenCount = _client.GetTokenCount(
-            prompt.Replace(InputTag, string.Empty).Replace(OutputTag, String.Empty));
+            prompt.Replace(InputTag, string.Empty).Replace(OutputTag, string.Empty));
 
         // hack: the 1/3 factor is heuristic (1/2 is too high)
         var residualTokenCapacity = (_client.TokenCapacity - promptTokenCount) / 3;
@@ -54,7 +54,7 @@ public class Transducer
 
         var outputTail = string.Empty;
 
-        var intputs = new List<string>(); // for troubleshooting, perf hit is inconsequential
+        var inputs = new List<string>(); // for troubleshooting, perf hit is inconsequential
         var outputs = new List<string>();
 
         for (var i = 0; ;)
@@ -67,6 +67,8 @@ public class Transducer
                 input = content[i..Math.Min(i + inputSize, content.Length)];
                 inputSize = (int)(inputSize * 0.9); // exponention shrinking
             } while (_client.GetTokenCount(input) > residualTokenCapacity);
+
+            inputs.Add(input);
 
             var query = prompt.Replace(InputTag, input).Replace(OutputTag, outputTail);
             var output = _client.GetCompletion(query);
