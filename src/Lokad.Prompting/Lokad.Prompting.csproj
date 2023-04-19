@@ -1,7 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net7.0</TargetFramework>
+    <TargetFrameworks>netstandard2.1</TargetFrameworks>
+    <AssemblyName>Lokad.Prompting</AssemblyName>
+    <RuntimeIdentifiers>win</RuntimeIdentifiers>
+    <OutputType>Library</OutputType>
+    <Company>Lokad</Company>
+    <Copyright>Copyright © Lokad 2023</Copyright>
+
+    <AssemblyVersion>0.2.0.0</AssemblyVersion>
+    <FileVersion>0.2.0</FileVersion>
+    <PackageId>Lokad.Prompting</PackageId>
+    <PackageVersion>0.2.0</PackageVersion>
+    <LangVersion>10.0</LangVersion>
+    <Version>0.2.0</Version>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageIcon>lokad.png</PackageIcon>
+    <PackageProjectUrl>https://github.com/Lokad/Prompting</PackageProjectUrl>
+    <Description>Simple kernels for LLMs, C#/.NET library</Description>
+    <authors>Joannes Vermorel</authors>
+
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
@@ -9,6 +28,21 @@
   <ItemGroup>
     <PackageReference Include="OpenAI" Version="1.7.2" />
     <PackageReference Include="SharpToken" Version="1.0.25" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\LICENSE.txt">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+    <None Include="..\..\lokad.png">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
+    <None Include="..\..\ReadMe.md">
+      <Pack>True</Pack>
+      <PackagePath></PackagePath>
+    </None>
   </ItemGroup>
 
 </Project>
