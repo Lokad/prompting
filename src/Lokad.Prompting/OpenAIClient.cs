@@ -18,9 +18,12 @@ public class OpenAIClient : ICompletionClient
 
     readonly GptEncoding _encoding;
 
-    public OpenAIClient(string apiKey, Model? model = null, double temperature = 0.0)
+    readonly int _maxTokens = 2049;
+
+    public OpenAIClient(string apiKey, Model? model = null, double temperature = 0.0, IHttpClientFactory httpClientFactory = null)
     {
         _api = new OpenAIAPI(apiKey);
+        _api.HttpClientFactory = httpClientFactory; // HINT: allow creating custom HttpClient (can be used to increase default Timeout)
         _model = model ?? Model.DavinciText;
         _temperature = temperature;
         _encoding = GptEncoding.GetEncoding("cl100k_base");
@@ -33,11 +36,24 @@ public class OpenAIClient : ICompletionClient
 
     public string GetCompletion(string prompt)
     {
-        return _api.Completions            
+        return _api.Completions
             .CreateCompletionAsync(
             new CompletionRequest(prompt,
                 model: _model,
                 temperature: _temperature,
-                max_tokens: 2049 /* HACK: this should not be hard-coded */)).Result.ToString();
+                max_tokens: _maxTokens
+                )).GetAwaiter().GetResult().ToString(); // HINT: we use GetAwaiter().GetResult() to avoid async/await also better than .Result
+    }
+
+    public async Task<string> GetCompletionAsync(string prompt)
+    {
+        var completionResult = await _api.Completions
+                        .CreateCompletionAsync(
+                            new CompletionRequest(prompt,
+                            model: _model,
+                            temperature: _temperature,
+                            max_tokens: _maxTokens
+                            ));
+        return completionResult.ToString();
     }
 }

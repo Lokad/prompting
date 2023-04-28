@@ -7,4 +7,5 @@ public interface ICompletionClient
     int GetTokenCount(string content);
 
     string GetCompletion(string prompt);
+    Task<string> GetCompletionAsync(string prompt);
 }
