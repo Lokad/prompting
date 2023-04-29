@@ -16,6 +16,7 @@
     <Version>0.3.0</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
+    <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
     <PackageIcon>lokad.png</PackageIcon>
     <PackageProjectUrl>https://github.com/Lokad/Prompting</PackageProjectUrl>
     <Description>Simple kernels for LLMs, C#/.NET library</Description>
@@ -41,7 +42,7 @@
     </None>
     <None Include="..\..\ReadMe.md">
       <Pack>True</Pack>
-      <PackagePath></PackagePath>
+      <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
 
