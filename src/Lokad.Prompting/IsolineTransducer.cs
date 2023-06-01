@@ -43,7 +43,7 @@ public class IsolineTransducer
         if (prompt == null || !prompt.Contains(InputTag) || !prompt.Contains(OutputTag))
             throw new ArgumentException("Invalid prompt");
 
-        prompt = prompt.Replace("\r\n", "\n"); // Always use Unix LR
+        prompt = prompt.Replace("\r\n", "\n").TrimEnd(Environment.NewLine.ToCharArray()); // Always use Unix LR
         content = content.Replace("\r\n", "\n"); 
 
         var promptTokenCount = _client.GetTokenCount(
