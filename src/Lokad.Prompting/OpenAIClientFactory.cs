@@ -4,16 +4,19 @@ public class OpenAIClientFactory : IHttpClientFactory
 {
     public HttpClient CreateClient(string name)
     {
-        return new HttpClient(new RetryHandler())
+        return new HttpClient(new RetryHandler(new HttpClientHandler()))
         {
             // The OpenAI API does usually answers albeit with considerable delay.
             Timeout = TimeSpan.FromMinutes(5)
+
         };
     }
 
     public class RetryHandler : DelegatingHandler
     {
         private const int maxRetries = 5;
+
+        public RetryHandler(HttpMessageHandler innerHandler) : base(innerHandler) { }
 
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)
