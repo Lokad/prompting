@@ -6,6 +6,12 @@ public interface ICompletionClient
 
     int GetTokenCount(string content);
 
-    string GetCompletion(string prompt);
-    Task<string> GetCompletionAsync(string prompt);
+    IReadOnlyList<FunDef> Functions { get; set; }
+
+    string GetCompletion(string prompt, CancellationToken cancel = default);
+
+    string GetCompletion(string prompt,
+        IReadOnlyList<string> stopSequences, 
+        out bool isStopped,
+        CancellationToken cancel = default);
 }

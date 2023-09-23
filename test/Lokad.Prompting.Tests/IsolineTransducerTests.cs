@@ -1,19 +1,11 @@
-﻿using Microsoft.Extensions.Configuration;
-using Xunit;
+﻿using Xunit;
 
 namespace Lokad.Prompting.Tests;
 
 public class IsolineTransducerTests
 {
-    private readonly IConfiguration _config;
-    public IsolineTransducerTests()
-    {
-        _config = new ConfigurationBuilder()
-            .AddUserSecrets<TransducerTests>()
-            .Build();
-    }
 
-    [Fact] // [Fact(Skip = "5min to run")]
+    [Fact(Skip = "No config setup + 5min to run")]
     public void TranslateLongHugoPage()
     {
         // Run from /test/Lokad.Prompting.Tests/bin/Debug/net7.0
@@ -40,8 +32,7 @@ Don't introduce extra line breaks, don't remove them either.
 {{output}}
 """;
 
-        var apiKey = _config["OpenAIKey"];
-        var transducer = new IsolineTransducer(new OpenAIClient(apiKey));
+        var transducer = new IsolineTransducer(null);
 
         var output = transducer.Do(prompt, content);
 

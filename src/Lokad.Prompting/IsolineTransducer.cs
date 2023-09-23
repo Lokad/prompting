@@ -21,24 +21,30 @@
 /// PROMPT TEMPLATE:
 /// 
 /// Continue the following translating from English to French.
-/// ### ENGLISH INPUT ###
+/// ===== ENGLISH INPUT =====
 /// {{input}}
-/// ### FRENCH OUTPUT ###
+/// ===== FRENCH OUTPUT =====
 /// {{output}}
 /// </remarks>
 public class IsolineTransducer
 {
+    /// <summary> Tokens for line number prefix, plus the line return. </summary>
+    const int LineNumberTokenCount = 4;
+
     public const string InputTag = "{{input}}";
     public const string OutputTag = "{{output}}";
 
     ICompletionClient _client;
+    int _tokenCapacity;
 
-    public IsolineTransducer(ICompletionClient client)
+    /// <summary> Depending on the task, the capacity can have to be adjusted downward. </summary>
+    public IsolineTransducer(ICompletionClient client, int? tokenCapacity =  null)
     {
         _client = client;
+        _tokenCapacity = tokenCapacity ?? _client.TokenCapacity;
     }
 
-    public string Do(string prompt, string content)
+    public string Do(string prompt, string content, ICompletionLogger log = null, CancellationToken cancel = default)
     {
         if (prompt == null || !prompt.Contains(InputTag) || !prompt.Contains(OutputTag))
             throw new ArgumentException("Invalid prompt");
@@ -49,8 +55,8 @@ public class IsolineTransducer
         var promptTokenCount = _client.GetTokenCount(
             prompt.Replace(InputTag, string.Empty).Replace(OutputTag, string.Empty));
 
-        var inputTokenCapacity = (_client.TokenCapacity - promptTokenCount) * 3 / 5; // heuristics to not exceed capacity
-        var outputTokenCapacity = (_client.TokenCapacity - promptTokenCount) * 1 / 5;
+        var extensionTokenCapacity = (_tokenCapacity - promptTokenCount) * 3 / 10; // heuristics to not exceed capacity
+        var overlapTokenCapacity = (_tokenCapacity - promptTokenCount) * 2 / 10;
 
         var inputLines = content.Split('\n', StringSplitOptions.None)
             .Reverse().SkipWhile(string.IsNullOrWhiteSpace).Reverse() // remove the blank lines at the end of any
@@ -60,81 +66,178 @@ public class IsolineTransducer
         if (inputLines.Length == 0) // degenerate content
             return string.Empty;
 
-        if (inputTokenCounts.Max() > inputTokenCapacity)
+        if (inputTokenCounts.Max() > extensionTokenCapacity)
             throw new ArgumentOutOfRangeException(nameof(content));
 
         var outputLines = new Dictionary<int, string>();
         var outputTokenCounts = new Dictionary<int, int>();
 
-        // i = start line of input, j = end line of input
-        // k = start line of tail
-        for (int i = 0, k = 0; ;)
+        do
         {
-            // Maximize input size under token capacity
-            var inputTokenCount = 0;
-            int j;
-            for (j = i; j < inputLines.Length; j++)
+            // i = start line of input, j = end line of input (inclusive)
+
+            var i = outputLines.Count;
+
+            // Maximize overlap size under token capacity
+            var overlapTokenCount = 0;
+            while(i > 0 &&
+                overlapTokenCount 
+                    + inputTokenCounts[i - 1] 
+                    + outputTokenCounts[i - 1] 
+                    + 2 * LineNumberTokenCount
+                        < overlapTokenCapacity)
             {
-                if (inputTokenCount + inputTokenCounts[j] + 4 < inputTokenCapacity)
-                {
-                    // +4 tokens for 'L123' prefix, plus line return
-                    inputTokenCount += inputTokenCounts[j] + 4;
-                }
-                else break;
+                overlapTokenCount +=
+                    inputTokenCounts[i - 1]
+                    + outputTokenCounts[i - 1]
+                    + 2 * LineNumberTokenCount;
+
+                i--;
             }
-            // Back-track until 'j' is not a blank line because it confuses GPT
-            while (string.IsNullOrWhiteSpace(inputLines[j - 1])) j--;
+
+        SetInput:
+
+            // SET THE INPUT
+
+            var j = i - 1;
+
+            // Maximize extension size under token capacity
+            var extensionTokenCount = 0;
+            while (j < inputLines.Length - 1 &&
+                extensionTokenCount
+                    + inputTokenCounts[j + 1]
+                    + LineNumberTokenCount
+                        < extensionTokenCapacity)
+            {
+                extensionTokenCount +=
+                    inputTokenCounts[j + 1]
+                    + LineNumberTokenCount;
+
+                j++;
+            }
+
+            if (j < i)
+                throw new InvalidOperationException("Line too long, can't be processed.");
+
+            // Back-track until 'j' is not a blank line because it confuses the LLM
+            while (j > 0 && string.IsNullOrWhiteSpace(inputLines[j])) j--;
+
+            // Line shift ensures that line numbering stays as 2-digits, as LLM struggles to enumerate further.
+            var lineShift = i - 1;
 
             // Range of input lines, [i .. j]
             var input = string.Empty;
-            for (var n = i; n < j; n++)
-                input += $"L{n} " + inputLines[n] + '\n'; // Always use Unix LR
+            for (var n = i; n <= j; n++)
+                input += $"L{n - lineShift} " + inputLines[n] + '\n'; // Always use Unix LR
+            var stopWord = $"L{j + 1 - lineShift}"; // insert the stop word at the very end of the input
+            input += stopWord;
 
-            // Range of output line [k ..]
+            // SET THE OUTPUT
+
+            // Range of output line [i .. k]
             var outputTail = string.Empty;
-            for (var n = k; n < outputLines.Count; n++)
-                outputTail += $"L{n} " + outputLines[n] + '\n'; // Always use Unix LR
+            for (var n = i; n < outputLines.Count; n++)
+                outputTail += $"L{n - lineShift} " + outputLines[n] + '\n'; // Always use Unix LR
 
-            var bait = $"L{outputLines.Count}";
+            // Do not include the whitespace at the end of the bait, it doesn't work due to LLM tokenization.
+            var bait = $"L{outputLines.Count - lineShift}";
             outputTail += bait;
 
             var query = prompt.Replace(InputTag, input).Replace(OutputTag, outputTail);
-            var output = bait + _client.GetCompletion(query);
+            log?.LogPrompt(query);
+            var completion = _client.GetCompletion(query, new[] { stopWord }, out bool isStopped, cancel);
+            log?.LogCompletion(completion);
 
-            var newLines = output.Split('\n').ToArray();
+            // Due to chat wrapping, the initial whitespace is usually dropped, this is OK.
+            if (!completion.StartsWith(" ")) completion = " " + completion;
+
+            var output = bait + completion;
+
+            // Empty entries may happen due to LLM behavior (should not).
+            var newLines = output.Split('\n', StringSplitOptions.RemoveEmptyEntries).ToArray();
+
+            // When the stopword isn't hit, the last line is frequently only half-processed, hence, we ditch it.
+            if (!isStopped && newLines.Length > 1)
+                newLines = newLines[..^1];
+
+            var isFirstLine = true;
             foreach (var newLine in newLines)
             {
-                if (!newLine.StartsWith("L"))
-                    throw new InvalidOperationException("Bogus line.");
+                // Forgotten line numbers may happen with LLM. We break and resume from breakage point.
+                if (!newLine.StartsWith("L") || !newLine.Contains(" "))
+                {
+                    if (!isFirstLine)
+                        goto ProcessTrailingBlanks;
+
+                    if(i < outputLines.Count)
+                    {
+                        i++;
+                        goto SetInput;
+                    }
+                    
+                    throw new InvalidOperationException("Missing line number.");
+                }
 
                 // prune the line prefix
                 var lineNumberStr = newLine.Substring(1, newLine.IndexOf(" "));
                 var cleanLine = newLine.Substring(newLine.IndexOf(" ") + 1);
 
                 if (!int.TryParse(lineNumberStr, out var lineNumber))
+                {
+                    if (!isFirstLine)
+                        goto ProcessTrailingBlanks;
+
+                    if (i < outputLines.Count)
+                    {
+                        i++;
+                        goto SetInput;
+                    }
+
                     throw new InvalidOperationException("Bogus line number.");
+                }
+
+                lineNumber += lineShift;
+
+                // Duplicate line numbers may happen with LLM. We break and resume from breakage point.
+                if ((lineNumber > 0 && !outputLines.ContainsKey(lineNumber - 1)) || outputLines.ContainsKey(lineNumber))
+                {
+                    if (!isFirstLine)
+                        goto ProcessTrailingBlanks;
+
+                    if (i < outputLines.Count)
+                    {
+                        i++;
+                        goto SetInput;
+                    }
+
+                    throw new InvalidOperationException("Non incremental line number.");
+                }
+
+                isFirstLine = false;
+
+                // GPT may incorrectly sometimes be off indentation wise
+                var indent = inputLines[lineNumber].TakeWhile(char.IsWhiteSpace).Count();
+                cleanLine = new string(' ', indent) + cleanLine.TrimStart();
 
                 outputLines.Add(lineNumber, cleanLine);
                 outputTokenCounts.Add(lineNumber, _client.GetTokenCount(cleanLine));
+
+                // Garbage may be introduced 'after' completing the task, just ignore if done already.
+                if (outputLines.Count >= inputLines.Length) // we are done
+                    break;
             }
 
-            if (outputLines.Count >= inputLines.Length) // we are done
-                break;
+        ProcessTrailingBlanks:
 
-            // Maximize tail size under token capacity
-            var tailTokenCount = 0;
-            for (k = outputLines.Keys.Max(); k >= 0 && k > i; k--)
+            // Move forward on blank lines because it confuses GPT
+            while (outputLines.Count < inputLines.Length && string.IsNullOrWhiteSpace(inputLines[outputLines.Count]))
             {
-                if (tailTokenCount + outputTokenCounts[k] + 4 < outputTokenCapacity)
-                {
-                    tailTokenCount += outputTokenCounts[k] + 4;
-                }
-                else break;
+                var ln = outputLines.Count;
+                outputLines.Add(ln, inputLines[ln]);
+                outputTokenCounts.Add(ln, _client.GetTokenCount(string.Empty));
             }
 
-            // Move forward the input
-            i = k;
-        }
+        } while (outputLines.Count < inputLines.Length);
 
         return string.Join(Environment.NewLine, 
             Enumerable.Range(0, outputLines.Count).Select(i => outputLines[i]));

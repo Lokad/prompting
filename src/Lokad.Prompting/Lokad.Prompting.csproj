@@ -15,9 +15,6 @@
     <LangVersion>10.0</LangVersion>
     <Version>0.5.1</Version>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
-    <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
-    <PackageIcon>lokad.png</PackageIcon>
     <PackageProjectUrl>https://github.com/Lokad/Prompting</PackageProjectUrl>
     <Description>Simple kernels for LLMs, C#/.NET library</Description>
     <authors>Joannes Vermorel</authors>
@@ -27,19 +24,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="OpenAI" Version="1.7.2" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.6" />
+    <PackageReference Include="Azure.Identity" Version="1.9.0" />
     <PackageReference Include="SharpToken" Version="1.0.25" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\LICENSE.txt">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
-    <None Include="..\..\lokad.png">
-      <Pack>True</Pack>
-      <PackagePath></PackagePath>
-    </None>
     <None Include="..\..\ReadMe.md">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
