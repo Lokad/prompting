@@ -26,19 +26,20 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     public IReadOnlyList<FunDef> Functions { get; set; }
 
-    public AzureOpenAICompletionClient(OpenAIClient client, string deployment, int tokenCapacity, Action<string> live = null)
+    public AzureOpenAICompletionClient(OpenAIClient client, string deployment, int tokenCapacity, Action<string>? live = null)
         : this(client, deployment, tokenCapacity, Encodings.DefaultEncoding, live)
     {
     }
 
     /// <remarks> The 'live' is used to get streamed outputs from the LLM. </remarks>
-    public AzureOpenAICompletionClient(OpenAIClient client, string deployment, int tokenCapacity, GptEncoding encoding, Action<string> live = null)
+    public AzureOpenAICompletionClient(OpenAIClient client, string deployment, int tokenCapacity, GptEncoding encoding, Action<string>? live = null)
     {
         _client = client;
         _deployment = deployment;
         _tokenCapacity = tokenCapacity;
         _encoding = encoding;
-        _live = live;
+        _live = live ?? new Action<string>(_ => { });
+        Functions = Array.Empty<FunDef>();
     }
 
     public string GetCompletion(string prompt, CancellationToken cancel = default)
@@ -60,7 +61,7 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
         var completionBuilder = new StringBuilder();
 
-        if (Functions != null && Functions.Count > 0)
+        if (Functions.Count > 0)
         {
             var finishReason = ProcessWithFunctionsAsync(completionOptions, completionBuilder, cancel)
                 .GetAwaiter().GetResult();
@@ -106,7 +107,7 @@ public class AzureOpenAICompletionClient : ICompletionClient
                 if (cancel.IsCancellationRequested)
                     throw new TaskCanceledException();
 
-                if(_live != null) _live(m.Content);
+                _live(m.Content);
                 completionBuilder.Append(m.Content);
             }
 
