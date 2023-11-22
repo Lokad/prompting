@@ -67,7 +67,13 @@ public class IsolineTransducer
             return string.Empty;
 
         if (inputTokenCounts.Max() > extensionTokenCapacity)
-            throw new ArgumentOutOfRangeException(nameof(content));
+        {
+            for(var i = 0; i < inputTokenCounts.Length; i++)
+            {
+                if (inputTokenCounts[i] > extensionTokenCapacity)
+                    throw new InvalidDataException($"Line {i} too long ({inputTokenCounts[i]} tokens, max {extensionTokenCapacity}): {inputLines[i].Substring(0, 60)}.. Split this big line into multiple shorter ones.");
+            }
+        }
 
         var outputLines = new Dictionary<int, string>();
         var outputTokenCounts = new Dictionary<int, int>();
