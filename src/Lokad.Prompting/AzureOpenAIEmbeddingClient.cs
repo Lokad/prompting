@@ -38,9 +38,9 @@ public class AzureOpenAIEmbeddingClient : IEmbeddingClient
         // '\n' sanitization suggested by the API for better performance
         var sanitized = content.Replace('\n', ' ');
 
-        var options = new EmbeddingsOptions(sanitized);
+        var options = new EmbeddingsOptions(_deployment, new[] { sanitized });
 
-        var response = _client.GetEmbeddings(_deployment, options);
+        var response = _client.GetEmbeddings(options);
         return response.Value.Data[0].Embedding.ToArray();
     }
 

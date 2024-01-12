@@ -6,10 +6,6 @@ using System.Text.Json;
 
 namespace Lokad.Prompting;
 
-/// <remarks>
-/// According to https://stackoverflow.com/questions/76192496/openai-v1-completions-vs-v1-chat-completions-end-points
-/// the chat completion is now the suggested path to get completions out of OpenAI.
-/// </remarks>
 public class AzureOpenAICompletionClient : ICompletionClient
 {
     private readonly OpenAIClient _client;
@@ -52,12 +48,13 @@ public class AzureOpenAICompletionClient : ICompletionClient
         var completionOptions = new ChatCompletionsOptions()
         {
             Temperature = 0,
+            DeploymentName = _deployment,
         };
 
         foreach(var stop in stopSequences)
             completionOptions.StopSequences.Add(stop);
 
-        completionOptions.Messages.Add(new ChatMessage(ChatRole.User, prompt));
+        completionOptions.Messages.Add(new ChatRequestUserMessage(prompt));
 
         var completionBuilder = new StringBuilder();
 
@@ -73,9 +70,7 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
         try
         {
-            var response = _client.GetChatCompletionsStreaming(
-                _deployment,
-                chatCompletionsOptions: completionOptions);
+            var response = _client.GetChatCompletionsStreaming(completionOptions);
 
             var finishReason = ProcessAsync(response, completionBuilder, cancel).GetAwaiter().GetResult();
 
@@ -93,23 +88,20 @@ public class AzureOpenAICompletionClient : ICompletionClient
         }
     }
 
-    private async Task<CompletionsFinishReason> ProcessAsync(
-        Response<StreamingChatCompletions> response, 
+    private async Task<CompletionsFinishReason?> ProcessAsync(
+        StreamingResponse<StreamingChatCompletionsUpdate> response, 
         StringBuilder completionBuilder,
         CancellationToken cancel)
     {
-        CompletionsFinishReason finishReason = null;
+        CompletionsFinishReason? finishReason = null;
 
-        await foreach (var c in response.Value.GetChoicesStreaming())
+        await foreach (StreamingChatCompletionsUpdate c in response)
         {
-            await foreach (var m in c.GetMessageStreaming())
-            {
-                if (cancel.IsCancellationRequested)
-                    throw new TaskCanceledException();
+            if (cancel.IsCancellationRequested)
+                throw new TaskCanceledException();
 
-                _live(m.Content);
-                completionBuilder.Append(m.Content);
-            }
+            _live(c.ContentUpdate);
+            completionBuilder.Append(c.ContentUpdate);
 
             finishReason = c.FinishReason;
         }
@@ -117,7 +109,7 @@ public class AzureOpenAICompletionClient : ICompletionClient
         return finishReason;
     }
 
-    private async Task<CompletionsFinishReason> ProcessWithFunctionsAsync(
+    private async Task<CompletionsFinishReason?> ProcessWithFunctionsAsync(
         ChatCompletionsOptions completionOptions, 
         StringBuilder completionBuilder,
         CancellationToken cancel)
@@ -155,18 +147,19 @@ public class AzureOpenAICompletionClient : ICompletionClient
         try
         {
             Response<ChatCompletions> response;
-            CompletionsFinishReason finishReason;
+            CompletionsFinishReason? finishReason;
 
             ContinueAfterCall:
 
             if (cancel.IsCancellationRequested)
                 throw new TaskCanceledException();
 
+            // HACK: it should be possible to use a streamed version below (it wasn't possible in the early beta of the SDK)
+            // StreamingResponse<StreamingChatCompletionsUpdate> response = _client.GetChatCompletionsStreaming(completionOptions);
+
             // If there is an error 400 here due to 'functions'
             // update the deployment to have model version '0613' or later.
-            response = await _client.GetChatCompletionsAsync(
-                _deployment,
-                chatCompletionsOptions: completionOptions);
+            response = await _client.GetChatCompletionsAsync(completionOptions);
 
             var choice = response.Value.Choices[0];
             finishReason = choice.FinishReason;
@@ -179,22 +172,23 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
             if (finishReason == CompletionsFinishReason.FunctionCall)
             {
-                completionOptions.Messages.Add(choice.Message);
+                completionOptions.Messages.Add(new ChatRequestAssistantMessage(choice.Message.Content)
+                {
+                    FunctionCall = choice.Message.FunctionCall,
+                });
 
                 var rawArgs = choice.Message.FunctionCall.Arguments;
-                ChatMessage funResult;
+                ChatRequestFunctionMessage funResult;
                 try
                 {
                     var parsedArgs = JsonDocument.Parse(rawArgs);
                     var fun = Functions.First(f => f.Name == choice.Message.FunctionCall.Name);
                     var res = fun.Evaluator(parsedArgs);
 
-                    funResult = new ChatMessage(ChatRole.Function,
-                        JsonSerializer.Serialize(res,
-                        new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
-                    {
-                        Name = choice.Message.FunctionCall.Name
-                    };
+                    funResult = new ChatRequestFunctionMessage(
+                        name: choice.Message.FunctionCall.Name,
+                        content: JsonSerializer.Serialize(res,
+                            new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
 
                     if (fun.IsFinal)
                     {
@@ -204,12 +198,11 @@ public class AzureOpenAICompletionClient : ICompletionClient
                 }
                 catch(Exception e)
                 {
-                    funResult = new ChatMessage(ChatRole.Function, 
-                        JsonSerializer.Serialize(e.Message, 
-                        new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
-                        {
-                            Name = choice.Message.FunctionCall.Name
-                        };
+                    funResult = new ChatRequestFunctionMessage(
+                        name: choice.Message.FunctionCall.Name,
+                        content: JsonSerializer.Serialize(e.Message, 
+                            new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
+                    ;
                 }
 
                 completionOptions.Messages.Add(funResult);
