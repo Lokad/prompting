@@ -1,6 +1,6 @@
 # Lokad.Prompting
 
-LLM utilities in a C#/.NET 5 library.
+LLM utilities in a C#/.NET library.
 
 Semantic kernels offer higher-level operations leveraging LLMs as 
 lower-level primitives.
