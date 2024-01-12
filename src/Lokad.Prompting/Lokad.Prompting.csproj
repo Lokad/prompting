@@ -6,7 +6,7 @@
     <RuntimeIdentifiers>win</RuntimeIdentifiers>
     <OutputType>Library</OutputType>
     <Company>Lokad</Company>
-    <Copyright>Copyright © Lokad 2023</Copyright>
+    <Copyright>Copyright © Lokad 2023-2024</Copyright>
 
     <AssemblyVersion>0.6.0.0</AssemblyVersion>
     <FileVersion>0.6.0</FileVersion>
@@ -25,7 +25,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.6" />
-    <PackageReference Include="Azure.Identity" Version="1.9.0" />
+    <PackageReference Include="Azure.Identity" Version="1.10.4" />
     <PackageReference Include="SharpToken" Version="1.0.25" />
   </ItemGroup>
 
