@@ -18,6 +18,8 @@
     <PackageProjectUrl>https://github.com/Lokad/Prompting</PackageProjectUrl>
     <Description>Simple kernels for LLMs, C#/.NET library</Description>
     <authors>Joannes Vermorel</authors>
+    <PackageReadmeFile>ReadMe.md</PackageReadmeFile>
+    <PackageLicenseFile>LICENSE.txt</PackageLicenseFile>
 
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
@@ -31,6 +33,10 @@
 
   <ItemGroup>
     <None Include="..\..\ReadMe.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\..\LICENSE.txt">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
