@@ -38,8 +38,15 @@ public class AzureOpenAICompletionClient : ICompletionClient
         Functions = Array.Empty<FunDef>();
     }
 
+    public static AzureOpenAICompletionClient FromOpenAI(string apiKey, string model, int tokenCapacity, Action<string>? live = null)
+    {
+        var client = new OpenAIClient(apiKey);
+        return new AzureOpenAICompletionClient(client, model /* model used as deployment */, tokenCapacity, live);
+    }
+
     public string GetCompletion(string prompt, CancellationToken cancel = default)
     {
+
         return GetCompletion(prompt, Array.Empty<string>(), out var _, cancel);
     }
 
