@@ -20,6 +20,8 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     private readonly Action<string> _live;
 
+    public string SystemPrompt { get; set; }
+
     public IReadOnlyList<FunDef> Functions { get; set; }
 
     public AzureOpenAICompletionClient(OpenAIClient client, string deployment, int tokenCapacity, Action<string>? live = null)
@@ -60,6 +62,11 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
         foreach(var stop in stopSequences)
             completionOptions.StopSequences.Add(stop);
+
+        if (!string.IsNullOrWhiteSpace(SystemPrompt))
+        {
+            completionOptions.Messages.Add(new ChatRequestSystemMessage(SystemPrompt));
+        }
 
         completionOptions.Messages.Add(new ChatRequestUserMessage(prompt));
 
