@@ -100,6 +100,16 @@ public class AzureOpenAICompletionClient : ICompletionClient
         {
             throw new ContentFilteredException("Azure Content Filter", completionBuilder.ToString(), ex);
         }
+        catch (RequestFailedException ex)
+            when (ex.ErrorCode == "context_length_exceeded")
+        {
+            throw new ContentLengthExceededException(ex.Message.Split('\n').First(), completionBuilder.ToString(), ex);
+        }
+        catch (RequestFailedException ex) // For OpenAI only
+            when (ex.Message != null && ex.Message.Contains("maximum context length is"))
+        {
+            throw new ContentLengthExceededException(ex.Message.Split('\n').First(), completionBuilder.ToString(), ex);
+        }
     }
 
     private async Task<CompletionsFinishReason?> ProcessAsync(
@@ -233,6 +243,11 @@ public class AzureOpenAICompletionClient : ICompletionClient
         }
         catch (RequestFailedException ex)
             when (ex.ErrorCode == "context_length_exceeded") 
+        {
+            throw new ContentLengthExceededException(ex.Message.Split('\n').First(), completionBuilder.ToString(), ex);
+        }
+        catch (RequestFailedException ex) // For OpenAI only
+            when (ex.Message != null && ex.Message.Contains("maximum context length is")) 
         {
             throw new ContentLengthExceededException(ex.Message.Split('\n').First(), completionBuilder.ToString(), ex);
         }
