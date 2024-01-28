@@ -6,6 +6,8 @@ using System.Text.Json;
 
 namespace Lokad.Prompting;
 
+// TODO: implement the 'live' support when functions are provided.
+
 public class AzureOpenAICompletionClient : ICompletionClient
 {
     private readonly OpenAIClient _client;
@@ -42,7 +44,7 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     public static AzureOpenAICompletionClient FromOpenAI(string apiKey, string model, int tokenCapacity, Action<string>? live = null)
     {
-        var client = new OpenAIClient(apiKey);
+        var client = new OpenAIClient(apiKey, new OpenAIClientOptions() {  RetryPolicy = new RateLimitingPolicy() });
         return new AzureOpenAICompletionClient(client, model /* model used as deployment */, tokenCapacity, live);
     }
 
