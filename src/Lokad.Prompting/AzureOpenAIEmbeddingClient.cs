@@ -29,14 +29,14 @@ public class AzureOpenAIEmbeddingClient : IEmbeddingClient
         _encoding = encoding;
     }
 
-    public float[] GetEmbedding(string content)
+    public float[] GetEmbedding(string input)
     {
-        var tk = GetTokenCount(content);
+        var tk = GetTokenCount(input);
         if (tk > TokenCapacity)
-            throw new ArgumentOutOfRangeException(nameof(content));
+            throw new ArgumentOutOfRangeException(nameof(input));
 
         // '\n' sanitization suggested by the API for better performance
-        var sanitized = content.Replace('\n', ' ');
+        var sanitized = input.Replace('\n', ' ');
 
         var options = new EmbeddingsOptions(_deployment, new[] { sanitized });
 
@@ -44,8 +44,27 @@ public class AzureOpenAIEmbeddingClient : IEmbeddingClient
         return response.Value.Data[0].Embedding.ToArray();
     }
 
-    public int GetTokenCount(string content)
+    public float[][] GetEmbeddings(IReadOnlyList<string> inputs)
     {
-        return _encoding.Encode(content).Count;
+        if (inputs == null)
+            throw new ArgumentNullException(nameof(inputs));
+
+        foreach(var input in inputs)
+        {
+            var tk = GetTokenCount(input);
+            if (tk > TokenCapacity)
+                throw new ArgumentOutOfRangeException(nameof(input));
+        }
+
+        // '\n' sanitization suggested by the API for better performance
+        var options = new EmbeddingsOptions(_deployment, inputs.Select(input => input.Replace('\n', ' ')));
+
+        var response = _client.GetEmbeddings(options);
+        return response.Value.Data.Select( d => d.Embedding.ToArray()).ToArray();
+    }
+
+    public int GetTokenCount(string input)
+    {
+        return _encoding.Encode(input).Count;
     }
 }
