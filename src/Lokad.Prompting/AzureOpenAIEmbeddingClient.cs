@@ -44,7 +44,7 @@ public class AzureOpenAIEmbeddingClient : IEmbeddingClient
         return response.Value.Data[0].Embedding.ToArray();
     }
 
-    public float[][] GetEmbeddings(IReadOnlyList<string> inputs)
+    public IReadOnlyList<float[]> GetEmbeddings(IReadOnlyList<string> inputs)
     {
         if (inputs == null)
             throw new ArgumentNullException(nameof(inputs));

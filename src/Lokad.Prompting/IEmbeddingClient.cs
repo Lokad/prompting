@@ -8,5 +8,5 @@ public interface IEmbeddingClient
 
     public float[] GetEmbedding(string input);
 
-    public float[][] GetEmbeddings(IReadOnlyList<string> inputs);
+    public IReadOnlyList<float[]> GetEmbeddings(IReadOnlyList<string> inputs);
 }
