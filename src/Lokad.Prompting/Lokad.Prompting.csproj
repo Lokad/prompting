@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.AI.OpenAI" Version="1.0.0-beta.12" />
-    <PackageReference Include="Azure.Identity" Version="1.10.4" />
+    <PackageReference Include="Azure.Identity" Version="1.11.2" />
     <PackageReference Include="SharpToken" Version="1.0.25" />
   </ItemGroup>
 
