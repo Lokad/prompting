@@ -56,6 +56,30 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     public string GetCompletion(string prompt, IReadOnlyList<string> stopSequences, out bool isStopped, CancellationToken cancel = default)
     {
+        int retriesLeft = 5;
+
+    Retry:
+
+        try
+        {
+            return GetCompletionInternal(prompt, stopSequences, out isStopped, cancel);
+        }
+        // HACK: The 'IOException' aren't properly caught by the Azure OpenAI SDK, despite having its own retry policy.
+        catch (IOException ex) when ((ex.Message ?? "").Contains("Unable to read data from the transport connection"))
+        {
+            retriesLeft--;
+
+            Thread.Sleep(1000);
+
+            if (retriesLeft >= 0)
+                goto Retry;
+
+            throw;
+        }
+    }
+
+    private string GetCompletionInternal(string prompt, IReadOnlyList<string> stopSequences, out bool isStopped, CancellationToken cancel = default)
+    {
         var completionOptions = new ChatCompletionsOptions()
         {
             Temperature = 0,
