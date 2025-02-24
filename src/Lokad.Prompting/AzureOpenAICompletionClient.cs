@@ -1,6 +1,11 @@
 ﻿using Azure;
 using Azure.AI.OpenAI;
+using OpenAI;
+using OpenAI.Assistants;
+using OpenAI.Chat;
 using SharpToken;
+using System.ClientModel;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -44,7 +49,7 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     public static AzureOpenAICompletionClient FromOpenAI(string apiKey, string model, int tokenCapacity, Action<string>? live = null)
     {
-        var client = new OpenAIClient(apiKey, new OpenAIClientOptions() {  RetryPolicy = new RateLimitingPolicy() });
+        var client = new OpenAIClient(new ApiKeyCredential(apiKey), new OpenAIClientOptions() { RetryPolicy = new RateLimitingPolicy() });
         return new AzureOpenAICompletionClient(client, model /* model used as deployment */, tokenCapacity, live);
     }
 
@@ -80,48 +85,51 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     private string GetCompletionInternal(string prompt, IReadOnlyList<string> stopSequences, out bool isStopped, CancellationToken cancel = default)
     {
-        var completionOptions = new ChatCompletionsOptions()
+        var chatClient = _client.GetChatClient(_deployment);
+
+        var messages = new List<ChatMessage>();
+
+        ChatCompletionOptions completionOptions = new()
         {
-            Temperature = 0,
-            DeploymentName = _deployment,
+            Temperature = 0
         };
 
-        foreach(var stop in stopSequences)
+        foreach (var stop in stopSequences)
             completionOptions.StopSequences.Add(stop);
 
         if (!string.IsNullOrWhiteSpace(SystemPrompt))
         {
-            completionOptions.Messages.Add(new ChatRequestSystemMessage(SystemPrompt));
+            messages.Add(new SystemChatMessage(SystemPrompt));
         }
 
-        completionOptions.Messages.Add(new ChatRequestUserMessage(prompt));
+        messages.Add(new UserChatMessage(prompt));
 
         var completionBuilder = new StringBuilder();
 
         if (Functions.Count > 0)
         {
-            var finishReason = ProcessWithFunctionsAsync(completionOptions, completionBuilder, cancel)
+            var finishReason = ProcessWithFunctionsAsync(chatClient, messages, completionOptions, completionBuilder, cancel)
                 .GetAwaiter().GetResult();
 
-            isStopped = finishReason == CompletionsFinishReason.Stopped;
+            isStopped = finishReason == ChatFinishReason.Stop;
 
             return completionBuilder.ToString();
         }
 
         try
         {
-            var response = _client.GetChatCompletionsStreaming(completionOptions);
+            var response = chatClient.CompleteChatStreamingAsync(messages, completionOptions);
 
             var finishReason = ProcessAsync(response, completionBuilder, cancel).GetAwaiter().GetResult();
 
-            if (finishReason == CompletionsFinishReason.ContentFiltered)
+            if (finishReason == ChatFinishReason.ContentFilter)
                 throw new ContentFilteredException("Azure Content Filter", completionBuilder.ToString());
 
-            isStopped = finishReason == CompletionsFinishReason.Stopped;
+            isStopped = finishReason == ChatFinishReason.Stop;
 
             return completionBuilder.ToString();
         }
-        catch (RequestFailedException ex) 
+        catch (RequestFailedException ex)
             when (ex.Message.Contains("The response was filtered due to the prompt triggering Azure OpenAI’s content management policy."))
         {
             throw new ContentFilteredException("Azure Content Filter", completionBuilder.ToString(), ex);
@@ -138,20 +146,23 @@ public class AzureOpenAICompletionClient : ICompletionClient
         }
     }
 
-    private async Task<CompletionsFinishReason?> ProcessAsync(
-        StreamingResponse<StreamingChatCompletionsUpdate> response, 
+    private async Task<ChatFinishReason?> ProcessAsync(
+        AsyncCollectionResult<StreamingChatCompletionUpdate> response,
         StringBuilder completionBuilder,
         CancellationToken cancel)
     {
-        CompletionsFinishReason? finishReason = null;
+        ChatFinishReason? finishReason = null;
 
-        await foreach (StreamingChatCompletionsUpdate c in response)
+        await foreach (StreamingChatCompletionUpdate c in response)
         {
             if (cancel.IsCancellationRequested)
                 throw new TaskCanceledException();
 
-            _live(c.ContentUpdate);
-            completionBuilder.Append(c.ContentUpdate);
+            foreach (ChatMessageContentPart contentPart in c.ContentUpdate)
+            {
+                _live(contentPart.Text);
+                completionBuilder.Append(contentPart.Text);
+            }
 
             finishReason = c.FinishReason;
         }
@@ -159,18 +170,19 @@ public class AzureOpenAICompletionClient : ICompletionClient
         return finishReason;
     }
 
-    private async Task<CompletionsFinishReason?> ProcessWithFunctionsAsync(
-        ChatCompletionsOptions completionOptions, 
+    private async Task<ChatFinishReason?> ProcessWithFunctionsAsync(
+        ChatClient chatClient,
+        List<ChatMessage> messages,
+        ChatCompletionOptions completionOptions,
         StringBuilder completionBuilder,
         CancellationToken cancel)
     {
         foreach (var fdef in Functions)
         {
-            var fd = new FunctionDefinition()
-            {
-                Name = fdef.Name,
-                Description = fdef.Description,
-                Parameters = BinaryData.FromObjectAsJson(
+            var fd = ChatTool.CreateFunctionTool(
+                fdef.Name,
+                fdef.Description,
+                BinaryData.FromObjectAsJson(
                 new
                 {
                     Type = "object",
@@ -184,83 +196,112 @@ public class AzureOpenAICompletionClient : ICompletionClient
                                 ParameterType.Number => "number",
                                 ParameterType.String => "string",
                             },
-                            Description = p.Description
+                            p.Description
                         }),
                     Required = fdef.Parameters.Where(p => !p.Optional).Select(p => p.Name),
                 },
                 new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase })
-            };
+            );
 
-            completionOptions.Functions.Add(fd);
+            completionOptions.Tools.Add(fd);
         }
-
+    
         try
         {
-            Response<ChatCompletions> response;
-            CompletionsFinishReason? finishReason;
+            bool requiresAction;
 
-            ContinueAfterCall:
+            ChatFinishReason? finishReason = null;
 
-            if (cancel.IsCancellationRequested)
-                throw new TaskCanceledException();
-
-            // HACK: it should be possible to use a streamed version below (it wasn't possible in the early beta of the SDK)
-            // StreamingResponse<StreamingChatCompletionsUpdate> response = _client.GetChatCompletionsStreaming(completionOptions);
-
-            // If there is an error 400 here due to 'functions'
-            // update the deployment to have model version '0613' or later.
-            response = await _client.GetChatCompletionsAsync(completionOptions);
-
-            var choice = response.Value.Choices[0];
-            finishReason = choice.FinishReason;
-
-            if (finishReason == CompletionsFinishReason.ContentFiltered)
-                throw new ContentFilteredException("Azure Content Filter", completionBuilder.ToString());
-
-            if (!string.IsNullOrWhiteSpace(choice.Message.Content))
-                completionBuilder.Append(choice.Message.Content);
-
-            if (finishReason == CompletionsFinishReason.FunctionCall)
+            do
             {
-                completionOptions.Messages.Add(new ChatRequestAssistantMessage(choice.Message.Content)
+                requiresAction = false;
+                StreamingChatToolCallsBuilder toolCallsBuilder = new();
+
+                if (cancel.IsCancellationRequested)
+                    throw new TaskCanceledException();
+
+                // If there is an error 400 here due to 'functions'
+                // update the deployment to have model version '0613' or later.
+                var response = chatClient.CompleteChatStreamingAsync(messages, completionOptions);
+
+                await foreach (StreamingChatCompletionUpdate completionUpdate in response)
                 {
-                    FunctionCall = choice.Message.FunctionCall,
-                });
-
-                var rawArgs = choice.Message.FunctionCall.Arguments;
-                ChatRequestFunctionMessage funResult;
-                try
-                {
-                    var parsedArgs = JsonDocument.Parse(rawArgs);
-                    var fun = Functions.First(f => f.Name == choice.Message.FunctionCall.Name);
-                    var res = fun.Evaluator(parsedArgs);
-
-                    funResult = new ChatRequestFunctionMessage(
-                        name: choice.Message.FunctionCall.Name,
-                        content: JsonSerializer.Serialize(res,
-                            new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
-
-                    if (fun.IsFinal)
+                    foreach (ChatMessageContentPart contentPart in completionUpdate.ContentUpdate)
                     {
-                        completionOptions.Messages.Add(funResult);
-                        return CompletionsFinishReason.Stopped;
+                        completionBuilder.Append(contentPart.Text);
+                    }
+
+                    foreach (StreamingChatToolCallUpdate toolCallUpdate in completionUpdate.ToolCallUpdates)
+                    {
+                        toolCallsBuilder.Append(toolCallUpdate);
+                    }
+
+                    finishReason = completionUpdate.FinishReason;
+
+                    switch (completionUpdate.FinishReason)
+                    {
+                        case ChatFinishReason.Stop:
+                            {
+                                // Add the assistant message to the conversation history.
+                                messages.Add(new AssistantChatMessage(completionBuilder.ToString()));
+                                break;
+                            }
+
+                        case ChatFinishReason.ToolCalls:
+                            {
+                                // First, collect the accumulated function arguments into complete tool calls to be processed
+                                IReadOnlyList<ChatToolCall> toolCalls = toolCallsBuilder.Build();
+
+                                // Next, add the assistant message with tool calls to the conversation history.
+                                AssistantChatMessage assistantMessage = new(toolCalls);
+
+                                if (completionBuilder.Length > 0)
+                                {
+                                    assistantMessage.Content.Add(ChatMessageContentPart
+                                        .CreateTextPart(completionBuilder.ToString()));
+                                }
+
+                                messages.Add(assistantMessage);
+
+                                // Then, add a new tool message for each tool call to be resolved.
+                                foreach (ChatToolCall toolCall in toolCalls)
+                                {
+                                    using JsonDocument argumentsJson = JsonDocument.Parse(toolCall.FunctionArguments);
+
+                                    var fun = Functions.First(f => f.Name == toolCall.FunctionName);
+
+                                    var toolResult = fun.Evaluator(argumentsJson);
+
+                                    messages.Add(new ToolChatMessage(toolCall.Id,
+                                        JsonSerializer.Serialize(toolResult,
+                                                new JsonSerializerOptions()
+                                                    { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }
+                                                )
+                                            )
+                                        );
+                                }
+
+                                requiresAction = true;
+
+                                break;
+                            }
+
+                        case ChatFinishReason.Length:
+                            throw new NotImplementedException("Incomplete model output due to MaxTokens parameter or token limit exceeded.");
+
+                        case ChatFinishReason.ContentFilter:
+                            throw new ContentFilteredException("Azure Content Filter", completionBuilder.ToString());
+
+                        case ChatFinishReason.FunctionCall:
+                            throw new NotImplementedException("Deprecated in favor of tool calls.");
+
+                        case null:
+                            break;
                     }
                 }
-                catch(Exception e)
-                {
-                    funResult = new ChatRequestFunctionMessage(
-                        name: choice.Message.FunctionCall.Name,
-                        content: JsonSerializer.Serialize(e.Message, 
-                            new JsonSerializerOptions() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }))
-                    ;
-                }
+            } while (requiresAction);
 
-                completionOptions.Messages.Add(funResult);
-
-                goto ContinueAfterCall;
-            }
-            
-            return choice.FinishReason;
+            return finishReason;
         }
         catch (RequestFailedException ex)
             when (ex.Message.Contains("The response was filtered due to the prompt triggering Azure OpenAI’s content management policy."))
@@ -268,12 +309,12 @@ public class AzureOpenAICompletionClient : ICompletionClient
             throw new ContentFilteredException("Azure Content Filter", completionBuilder.ToString(), ex);
         }
         catch (RequestFailedException ex)
-            when (ex.ErrorCode == "context_length_exceeded") 
+            when (ex.ErrorCode == "context_length_exceeded")
         {
             throw new ContentLengthExceededException(ex.Message.Split('\n').First(), completionBuilder.ToString(), ex);
         }
         catch (RequestFailedException ex) // For OpenAI only
-            when (ex.Message != null && ex.Message.Contains("maximum context length is")) 
+            when (ex.Message != null && ex.Message.Contains("maximum context length is"))
         {
             throw new ContentLengthExceededException(ex.Message.Split('\n').First(), completionBuilder.ToString(), ex);
         }
