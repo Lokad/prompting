@@ -1,5 +1,4 @@
 ﻿using OpenAI;
-using OpenAI.Embeddings;
 using SharpToken;
 
 namespace Lokad.Prompting;
