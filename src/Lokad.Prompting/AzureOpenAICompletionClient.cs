@@ -1,11 +1,8 @@
 ﻿using Azure;
-using Azure.AI.OpenAI;
 using OpenAI;
-using OpenAI.Assistants;
 using OpenAI.Chat;
 using SharpToken;
 using System.ClientModel;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
