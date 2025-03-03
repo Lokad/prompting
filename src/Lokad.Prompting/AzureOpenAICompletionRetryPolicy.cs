@@ -1,35 +1,36 @@
-﻿using Azure.Core.Pipeline;
-using Azure.Core;
+﻿using System.ClientModel.Primitives;
 
-public class AzureOpenAICompletionRetryPolicy : HttpPipelinePolicy
+public class AzureOpenAICompletionRetryPolicy : PipelinePolicy
 {
     private const int maxRetries = 10;
 
-    public override void Process(HttpMessage message, ReadOnlyMemory<HttpPipelinePolicy> pipeline)
+    public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
     {
-        RetryProcess(message, pipeline, async: false).GetAwaiter().GetResult();
+        RetryProcess(message, pipeline, currentIndex, async: false).GetAwaiter().GetResult();
     }
 
-    public override async ValueTask ProcessAsync(HttpMessage message, ReadOnlyMemory<HttpPipelinePolicy> pipeline)
+    public override async ValueTask ProcessAsync(PipelineMessage message,
+        IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
     {
-        await RetryProcess(message, pipeline, async: true);
+        await RetryProcess(message, pipeline, currentIndex, async: true);
     }
 
-    private async ValueTask RetryProcess(HttpMessage message, ReadOnlyMemory<HttpPipelinePolicy> pipeline, bool async)
+    private async ValueTask RetryProcess(PipelineMessage message,
+        IReadOnlyList<PipelinePolicy> pipeline, int currentIndex, bool async)
     {
         var delay = TimeSpan.FromSeconds(1); // Initial delay
         for (int i = 0; i < maxRetries; i++)
         {
             if (async)
             {
-                await ProcessNextAsync(message, pipeline);
+                await ProcessNextAsync(message, pipeline, currentIndex);
             }
             else
             {
-                ProcessNext(message, pipeline);
+                ProcessNext(message, pipeline, currentIndex);
             }
 
-            if (!message.ResponseClassifier.IsErrorResponse(message))
+            if (message.ResponseClassifier.TryClassify(message, out var isError) && !isError)
             {
                 return;
             }

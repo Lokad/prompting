@@ -1,4 +1,4 @@
-﻿using Azure.AI.OpenAI;
+﻿using OpenAI;
 using SharpToken;
 
 namespace Lokad.Prompting;
@@ -31,6 +31,8 @@ public class AzureOpenAIEmbeddingClient : IEmbeddingClient
 
     public float[] GetEmbedding(string input)
     {
+        var embeddingClient = _client.GetEmbeddingClient(_deployment);
+
         var tk = GetTokenCount(input);
         if (tk > TokenCapacity)
             throw new ArgumentOutOfRangeException(nameof(input));
@@ -38,14 +40,16 @@ public class AzureOpenAIEmbeddingClient : IEmbeddingClient
         // '\n' sanitization suggested by the API for better performance
         var sanitized = input.Replace('\n', ' ');
 
-        var options = new EmbeddingsOptions(_deployment, new[] { sanitized });
+        var response = embeddingClient.GenerateEmbedding(sanitized);
 
-        var response = _client.GetEmbeddings(options);
-        return response.Value.Data[0].Embedding.ToArray();
+        ReadOnlyMemory<float> vector = response.Value.ToFloats();
+        return vector.ToArray();
     }
 
     public IReadOnlyList<float[]> GetEmbeddings(IReadOnlyList<string> inputs)
     {
+        var embeddingClient = _client.GetEmbeddingClient(_deployment);
+
         if (inputs == null)
             throw new ArgumentNullException(nameof(inputs));
 
@@ -57,10 +61,9 @@ public class AzureOpenAIEmbeddingClient : IEmbeddingClient
         }
 
         // '\n' sanitization suggested by the API for better performance
-        var options = new EmbeddingsOptions(_deployment, inputs.Select(input => input.Replace('\n', ' ')));
+        var response = embeddingClient.GenerateEmbeddings(inputs.Select(input => input.Replace('\n', ' ')));
 
-        var response = _client.GetEmbeddings(options);
-        return response.Value.Data.Select( d => d.Embedding.ToArray()).ToArray();
+        return response.Value.Select( d => d.ToFloats().ToArray()).ToArray();
     }
 
     public int GetTokenCount(string input)

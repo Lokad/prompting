@@ -1,5 +1,4 @@
-﻿using Azure.Core;
-using Azure.Core.Pipeline;
+﻿using System.ClientModel.Primitives;
 
 namespace Lokad.Prompting;
 
@@ -9,7 +8,7 @@ namespace Lokad.Prompting;
 /// as the OpenAI API diverges from the Azure OpenAI one. This retry policy
 /// ensures that the rate limiting is enforced on the direct OpenAI side.
 /// </remarks>
-public class RateLimitingPolicy : HttpPipelinePolicy
+public class RateLimitingPolicy : PipelinePolicy
 {
     private readonly int _maxRetries;
     private readonly TimeSpan _baseDelay;
@@ -20,13 +19,13 @@ public class RateLimitingPolicy : HttpPipelinePolicy
         _baseDelay = baseDelay ?? TimeSpan.FromSeconds(3);
     }
 
-    public override void Process(HttpMessage message, ReadOnlyMemory<HttpPipelinePolicy> pipeline)
+    public override void Process(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
     {
         int retryCount = 0;
 
         while (true)
         {
-            ProcessNext(message, pipeline);
+            ProcessNext(message, pipeline, currentIndex);
 
             if (message.Response.Status != 429 || retryCount >= _maxRetries)
             {
@@ -39,13 +38,13 @@ public class RateLimitingPolicy : HttpPipelinePolicy
         }
     }
 
-    public override async ValueTask ProcessAsync(HttpMessage message, ReadOnlyMemory<HttpPipelinePolicy> pipeline)
+    public override async ValueTask ProcessAsync(PipelineMessage message, IReadOnlyList<PipelinePolicy> pipeline, int currentIndex)
     {
         int retryCount = 0;
 
         while (true)
         {
-            await ProcessNextAsync(message, pipeline);
+            await ProcessNextAsync(message, pipeline, currentIndex);
 
             if (message.Response.Status != 429 || retryCount >= _maxRetries)
             {
