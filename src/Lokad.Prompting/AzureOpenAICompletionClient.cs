@@ -88,7 +88,8 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
         ChatCompletionOptions completionOptions = new()
         {
-            Temperature = 0
+            // [vermorel] 2025-03, temperature doesn't work anymore with o1 gen models.
+            // Temperature = 0
         };
 
         foreach (var stop in stopSequences)
