@@ -1,4 +1,5 @@
 ﻿using Azure;
+using Azure.AI.OpenAI.Chat;
 using OpenAI;
 using OpenAI.Chat;
 using SharpToken;
@@ -104,6 +105,16 @@ public class AzureOpenAICompletionClient : ICompletionClient
                 _ => throw new ArgumentOutOfRangeException()
             }
         };
+
+        // HACK: Model o1/o3 is enabled only for api versions 2024-12-01-preview and later
+        // https://github.com/Azure/azure-sdk-for-net/issues/47809#issuecomment-2659049371
+        if (ReasoningEffortLevel != null)
+        {
+#pragma warning disable AOAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+            completionOptions.SetNewMaxCompletionTokensPropertyEnabled(true);
+#pragma warning restore AOAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+            completionOptions.ResponseModalities = ChatResponseModalities.Default;
+        }
 
         foreach (var stop in stopSequences)
             completionOptions.StopSequences.Add(stop);
