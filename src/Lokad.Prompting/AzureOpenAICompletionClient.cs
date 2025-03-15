@@ -26,6 +26,9 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     public string SystemPrompt { get; set; }
 
+    /// <summary>high, medium, low</summary>
+    public string? ReasoningEffortLevel { get; set; }
+
     public IReadOnlyList<FunDef> Functions { get; set; }
 
     public AzureOpenAICompletionClient(OpenAIClient client, string deployment, int tokenCapacity, Action<string>? live = null)
@@ -90,6 +93,16 @@ public class AzureOpenAICompletionClient : ICompletionClient
         {
             // [vermorel] 2025-03, temperature doesn't work anymore with o1 gen models.
             // Temperature = 0
+
+            // Only works with reasoning models
+            ReasoningEffortLevel = ReasoningEffortLevel switch
+            {
+                null => null,
+                "high" => ChatReasoningEffortLevel.High,
+                "medium" => ChatReasoningEffortLevel.Medium,
+                "low" => ChatReasoningEffortLevel.Low,
+                _ => throw new ArgumentOutOfRangeException()
+            }
         };
 
         foreach (var stop in stopSequences)
