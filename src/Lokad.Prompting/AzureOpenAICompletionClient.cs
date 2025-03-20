@@ -28,6 +28,9 @@ public class AzureOpenAICompletionClient : ICompletionClient
 
     public IReadOnlyList<FunDef> Functions { get; set; }
 
+    /// <summary> Only for reasoning models (o1, o3, etc). </summary>
+    public string? ReasoningEffortLevel { get; set; }
+
     public AzureOpenAICompletionClient(OpenAIClient client, string deployment, int tokenCapacity, Action<string>? live = null)
         : this(client, deployment, tokenCapacity, Encodings.DefaultEncoding, live)
     {
@@ -91,6 +94,17 @@ public class AzureOpenAICompletionClient : ICompletionClient
             // [vermorel] 2025-03, temperature doesn't work anymore with o1 gen models.
             // Temperature = 0
         };
+
+        if (ReasoningEffortLevel != null)
+        {
+            completionOptions.ReasoningEffortLevel = (ReasoningEffortLevel ?? throw new NullReferenceException()).ToLowerInvariant() switch
+            {
+                "high" => ChatReasoningEffortLevel.High,
+                "medium" => ChatReasoningEffortLevel.Medium,
+                "low" => ChatReasoningEffortLevel.Low,
+                _ => throw new NotSupportedException("Invalid reasoning effort level.")
+            };
+        }
 
         foreach (var stop in stopSequences)
             completionOptions.StopSequences.Add(stop);
